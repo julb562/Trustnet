@@ -1,14 +1,14 @@
 from config import Config
 from participant import Participant
-from shamir import Shamir_secret
+from shamir import ShamirSecret
 
-from binascii import hexlify
-#from Crypto.Cipher import AES
-#from Crypto.Random import get_random_bytes
-#from Cryptodome.Protocol.SecretSharing import Shamir
-#key = "😊   '    j3j"
-key = ".,forv1)"
-secret1=Shamir_secret(5, 3, key)
+
+key = ".äforv.,sdf89ufg24fnklK.-,dfg-.,eg0942ieg,"
+secret1=ShamirSecret(5, 3)
+secret1.create_secret(key)
+for participant_data in secret1.iterate_participants():
+    print(participant_data)
+
 
 #key = get_random_bytes(16)
 
