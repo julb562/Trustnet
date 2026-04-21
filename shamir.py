@@ -3,6 +3,7 @@ from math import ceil
 from decimal import Decimal
 import base64
 import datetime
+from uuid import uuid4
 
 FIELD_SIZE = 10**5
 
@@ -32,29 +33,6 @@ def integer_list_to_string(input_list: list, bytes_per_integer: int) -> str:
         all_bytes.extend(integer.to_bytes(bytes_per_integer, byteorder='big'))
     return bytes(all_bytes[:byte_length]).decode('utf-8')
 
-#class ParticipantData:
-#    def __init__(self) -> None:
-#        self.data: list = []
-#        self.index: int = 0
-#
-#    def __iter__(self) -> dict:
-#        if self.data:
-#            self.index = 0
-#            return self.data[0]
-#        raise StopIteration
-#
-#    def __next__(self) -> list:
-#        if self.index + 1 < len(self.data):
-#            self.index += 1
-#            return self.data[self.index]
-#        raise StopIteration()
-#
-#    def add_participant(self, data: dict) -> None:
-#        self.data.append(data)
-#
-#    def clear_data(self) -> None:
-#        self.data = []
-
 
 class ShamirSecret:
     """
@@ -63,7 +41,13 @@ class ShamirSecret:
     Original secret_raw can be a string of any format for it's tarnsformed:
     """
 
-    def __init__(self, shares: int = 5, treshold: int = 3):
+    def __init__(
+        self,
+        name: str,
+        owner: str,
+        shares: int = 5,
+        treshold: int = 3,
+    ):
         """
             Holds exactly one passphrase
             create_secret:
@@ -81,69 +65,142 @@ class ShamirSecret:
              3. Each secret holder should now be handed all keys in vertical
                 axis of this matrix
         """
+        self.ready_to_decode = False
         self.treshold = treshold
         self.shares = shares
+        self.name = name
+        self.owner = owner
+        self.uuid = uuid4()
         self.plain_text_codes: list = []
         self.secret_matrix: list = []
         self.byte_length: int = 0
         self.creation_date = datetime.datetime(1800, 1, 1)
-        self.participant_data = []
-        
-
-        #self._decode_bits_secret()
-        #self.integer_list = string_to_integers(secret_raw, 10)
-        #print(self.integer_list)
-        #temp_returned_string = int in plain_text_codeseger_list_to_string(self.integer_list, 10)
-        #print(temp_returned_string)
-        #exit()Plain_text_codes is
+        self.decoding_participants_keys: list =[]
+        self.bytes_per_integer: int = 8 # Growing this may brake decoding
 
     def create_secret(self, secret_raw: str)->None:
         print(secret_raw)
-        self.plain_text_codes = string_to_integers(secret_raw, 18)
+        self.plain_text_codes = string_to_integers(
+            secret_raw, 
+            self.bytes_per_integer
+        )
         self.byte_length = self.plain_text_codes[0]
         self.creation_date = datetime.datetime.now()
-        self.participant_data = []
-        for plaintext_integer in self.plain_text_codes[1:]:
+        for plaintext_integer in self.plain_text_codes:
             self.secret_matrix.append(
                 self.generate_shares(
                     self.shares,
                     self.treshold,
                     plaintext_integer))
-        #    print(self.secret_matrix[-1])
-        # print()
+            print(f"Original {plaintext_integer}")
+            #print(f"Decoded {self.reconstruct_secret(self.secret_matrix[-1])}")
+        self.ready_to_decode = True
 
-        self.secret_matrix=[
-            [101, 201, 301, 401],
-            [102, 202, 302, 402],
-            [103, 203, 303, 403],
-            [104, 204, 304, 404],
-            [105, 205, 305, 405],
-        ]
+#        self.secret_matrix=[
+#            [101, 201, 301, 401],
+#            [102, 202, 302, 402],
+#            [103, 203, 303, 403],
+#            [104, 204, 304, 404],
+#            [105, 205, 305, 405],
+#        ]
 
-        for line in self.secret_matrix:
-            print(line)
-
-        for secret_ind, secret in enumerate(self.secret_matrix[0]):
-            single_participant_data: dict = {
-                "byte_length": self.byte_length,
-                "creation_date": self.creation_date,
-                "keys": [],
-            }
-            for participant_ind, secret_list in enumerate(self.secret_matrix):
-                single_participant_data["keys"].append(
-                    self.secret_matrix[participant_ind][secret_ind]
-                )
-            print(single_participant_data["keys"])
+        #for line in self.secret_matrix:
+            #print(line)
 
     def iterate_participants(self) -> dict:
         """
-        Iterator that returns participants' datas after 
-        a secret has been created.
+        Iterator that returns participants' datas as a dict
+        after a secret has been created.
         """
+
+        # Create the key data per participant
+        participant_data = []
+        for secret_ind, secret in enumerate(self.secret_matrix[0]):
+            single_participant_data: list = []
+            for participant_ind, secret_list in enumerate(self.secret_matrix):
+                single_participant_data.append(
+                    self.secret_matrix[participant_ind][secret_ind]
+                )
+            # print(single_participant_data)
+            participant_data.append(single_participant_data)
+
+        # Iterate over the created data
         index = -1
-        while index + 1 < len(self.participant_data):
-            index += 1
-            yield self.participant_data[index]
+        while index + 1 < len(participant_data):
+            index += 1            
+            yield {
+                "keys": participant_data[index],
+                "byte_length": self.byte_length,
+                "creation_date": self.creation_date,
+                "owner": self.owner,
+                "name": self.name,
+                "uuid": self.uuid,
+                "treshold": self.treshold,
+                "shares": self.shares
+            }            
+
+    def populate_decoder(self, participant_data: dict) -> int:
+        """
+        Takes a participant data dict as input.
+
+        If secret_matrix has values, tests other data to match
+        the given essentials and fail if it doesn't
+
+        if secret_matrix empty, populates all settings from 
+        given participant data
+        
+        last tries to add key data to secret_matrix -list if it
+        differs from existing data.
+
+        Returns negative integer of participants key required 
+        after this operation to decode the secret in all cases
+        """
+        failed = False
+        if self.decoding_participants_keys:
+            # Some data in secret_matrix. Check the newly given
+            # matches that            
+            if self.creation_date != participant_data["creation_date"]:
+                failed = True
+            if self.uuid != participant_data["uuid"]:
+                failed = True
+            if self.name != participant_data["name"]:
+                failed = True
+
+        if participant_data["keys"] in self.decoding_participants_keys:
+            failed = True
+
+        if failed:
+            return 0 - self.treshold + len(self.decoding_participants_keys)
+
+        self.decoding_participants_keys.append(participant_data["keys"])
+        #print(participant_data["keys"])
+        self.byte_length = participant_data["byte_length"]
+        self.creation_date = participant_data["creation_date"]
+        self.owner = participant_data["owner"]
+        self.name = participant_data["name"]
+        self.uuid = participant_data["uuid"]
+        self.treshold = participant_data["treshold"]
+        self.shares = participant_data["shares"]
+        shares_needed = (
+            0 - self.treshold + len(self.decoding_participants_keys)
+        )
+        if shares_needed >= 0:
+            self.ready_to_decode = True
+        return shares_needed
+
+    def decode(self) -> str:
+        if not self.ready_to_decode:
+            return ""
+        decrypted_ints: list = []
+        for key_ind, temp in enumerate(self.decoding_participants_keys[0]):
+            this_parts_encrypted_ints: list = []
+            for line in self.decoding_participants_keys:
+                this_parts_encrypted_ints.append(line[key_ind])
+            #print(this_parts_encrypted_ints)
+            decrypted_ints.append(self.reconstruct_secret(this_parts_encrypted_ints))
+            print(decrypted_ints[-1])
+        print(integer_list_to_string(decrypted_ints, self.bytes_per_integer))
+        return "I tried, but this is all I could do!"
 
     def reconstruct_secret(self, shares: list) -> int:
         """
@@ -217,3 +274,11 @@ class ShamirSecret:
 
         return shares
 
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+        self.secret_matrix = []
+        self.__init__("","")
+        print("Exited Samir secret handler")
+    
+    def __enter__(self):
+        print("Created Samir secret handler")
+        return self

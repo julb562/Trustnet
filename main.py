@@ -3,12 +3,23 @@ from participant import Participant
 from shamir import ShamirSecret
 
 
-key = ".äforv.,sdf89ufg24fnklK.-,dfg-.,eg0942ieg,"
-secret1=ShamirSecret(5, 3)
-secret1.create_secret(key)
-for participant_data in secret1.iterate_participants():
-    print(participant_data)
+participant_data = []
 
+key = ".äforv.,sdfesti 🙈🙈89ufg24fnklK.-,dfg-.,eg0942ieg,"
+with ShamirSecret("Tester", "localhost", 6, 3) as secret1:
+    secret1.create_secret(key)
+    for single_participant_data in secret1.iterate_participants():
+        #print(single_participant_data)
+        participant_data.append(single_participant_data)
+
+print(f"Exited shamir's ready to decode: {secret1.ready_to_decode}")
+
+with ShamirSecret("Tester", "localhost", 6, 3) as secret2:
+    secret2.populate_decoder(participant_data[0])
+    secret2.populate_decoder(participant_data[2])
+    secret2.populate_decoder(participant_data[4])
+    print(secret2.decode())
+    
 
 #key = get_random_bytes(16)
 
