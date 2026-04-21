@@ -1,11 +1,11 @@
-import random
+import secrets
 from math import ceil
-from decimal import Decimal
 import base64
 import datetime
 from uuid import uuid4
 
-FIELD_SIZE = 10**5
+# 12th Mersenne prime — larger than any 8-byte (64-bit) secret integer
+PRIME = 2**127 - 1
 
 
 def string_to_integers(input_raw: str, bytes_per_integer: int) -> list:
@@ -186,41 +186,37 @@ class ShamirSecret:
     def reconstruct_secret(self, shares: list) -> int:
         """
         Combines individual shares (points on graph)
-        using Lagranges interpolation.
+        using Lagrange interpolation in GF(PRIME).
 
         `shares` is a list of points (x, y) belonging to a
         polynomial with a constant of our key.
         """
         sums = 0
-        prod_arr = []
-
         for j, share_j in enumerate(shares):
             xj, yj = share_j
-            prod = Decimal(1)
-
+            num = 1
+            den = 1
             for i, share_i in enumerate(shares):
                 xi, _ = share_i
                 if i != j:
-                    prod *= Decimal(Decimal(xi)/(xi-xj))
-
-            prod *= yj
-            sums += Decimal(prod)
-
-        return int(round(Decimal(sums), 0))
+                    num = (num * (-xi)) % PRIME
+                    den = (den * (xj - xi)) % PRIME
+            lagrange = (num * pow(den, -1, PRIME)) % PRIME
+            sums = (sums + yj * lagrange) % PRIME
+        return sums
 
 
     def polynom(self, x, coefficients):
         """
         This generates a single point on the graph of given polynomial
         in `x`. The polynomial is given by the list of `coefficients`.
+        All arithmetic is done in GF(PRIME).
         """
         point = 0
-        # Loop through reversed list, so that indices from enumerate match the
-        # actual coefficient indices
         for coefficient_index, coefficient_value in enumerate(
             coefficients[::-1]
         ):
-            point += x ** coefficient_index * coefficient_value
+            point = (point + pow(x, coefficient_index, PRIME) * coefficient_value) % PRIME
         return point
 
 
@@ -232,11 +228,11 @@ class ShamirSecret:
         For example with a 3rd degree coefficient like this:
             3x^3 + 4x^2 + 18x + 554
 
-            554 is the secret, and the polynomial degree + 1 is 
-            how many points are needed to recover this secret. 
+            554 is the secret, and the polynomial degree + 1 is
+            how many points are needed to recover this secret.
             (in this case it's 4 points).
         """
-        coeff = [random.randrange(0, FIELD_SIZE) for _ in range(treshold - 1)]
+        coeff = [secrets.randbelow(PRIME) for _ in range(treshold - 1)]
         coeff.append(secret)
         return coeff
 
@@ -248,9 +244,13 @@ class ShamirSecret:
         """
         coefficients = self.coeff(m, secret)
         shares = []
+        x_values: set = set()
 
-        for i in range(1, n_shares+1):
-            x = random.randrange(1, FIELD_SIZE)
+        while len(shares) < n_shares:
+            x = secrets.randbelow(PRIME - 1) + 1  # x in [1, PRIME-1]
+            if x in x_values:
+                continue
+            x_values.add(x)
             shares.append((x, self.polynom(x, coefficients)))
 
         return shares
