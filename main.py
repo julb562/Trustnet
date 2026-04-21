@@ -3,22 +3,32 @@ from participant import Participant
 from shamir import ShamirSecret
 
 
-participant_data = []
+bad_strings = open("../big-list-of-naughty-strings/blns.txt", "r")
+line: int = 0
 
-key = ".äforv.,sdfesti 🙈🙈89ufg24fnklK.-,dfg-.,eg0942ieg,"
-with ShamirSecret("Tester", "localhost", 6, 3) as secret1:
-    secret1.create_secret(key)
-    for single_participant_data in secret1.iterate_participants():
-        #print(single_participant_data)
-        participant_data.append(single_participant_data)
+for key in bad_strings:
+    line += 1
 
-print(f"Exited shamir's ready to decode: {secret1.ready_to_decode}")
+    participant_data = []
 
-with ShamirSecret("Tester", "localhost", 6, 3) as secret2:
-    secret2.populate_decoder(participant_data[0])
-    secret2.populate_decoder(participant_data[2])
-    secret2.populate_decoder(participant_data[4])
-    print(secret2.decode())
+    with ShamirSecret("Tester", "localhost", 6, 3) as secret1:
+        secret1.create_secret(key)
+        for single_participant_data in secret1.iterate_participants():
+            #print(single_participant_data)
+            participant_data.append(single_participant_data)
+
+    with ShamirSecret("Tester", "localhost", 6, 3) as secret2:
+        secret2.populate_decoder(participant_data[1])
+        secret2.populate_decoder(participant_data[2])
+        secret2.populate_decoder(participant_data[2])
+        secret2.populate_decoder(participant_data[2])
+        secret2.populate_decoder(participant_data[0])
+        result = secret2.decode()
+
+    if result != key:
+        print(f"\n Line {line} failed")
+    else: print(".", end="")
+print(f"\n{line} lines went ok")
     
 
 #key = get_random_bytes(16)

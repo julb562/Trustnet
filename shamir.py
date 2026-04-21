@@ -79,7 +79,6 @@ class ShamirSecret:
         self.bytes_per_integer: int = 8 # Growing this may brake decoding
 
     def create_secret(self, secret_raw: str)->None:
-        print(secret_raw)
         self.plain_text_codes = string_to_integers(
             secret_raw, 
             self.bytes_per_integer
@@ -92,20 +91,7 @@ class ShamirSecret:
                     self.shares,
                     self.treshold,
                     plaintext_integer))
-            print(f"Original {plaintext_integer}")
-            #print(f"Decoded {self.reconstruct_secret(self.secret_matrix[-1])}")
         self.ready_to_decode = True
-
-#        self.secret_matrix=[
-#            [101, 201, 301, 401],
-#            [102, 202, 302, 402],
-#            [103, 203, 303, 403],
-#            [104, 204, 304, 404],
-#            [105, 205, 305, 405],
-#        ]
-
-        #for line in self.secret_matrix:
-            #print(line)
 
     def iterate_participants(self) -> dict:
         """
@@ -121,7 +107,6 @@ class ShamirSecret:
                 single_participant_data.append(
                     self.secret_matrix[participant_ind][secret_ind]
                 )
-            # print(single_participant_data)
             participant_data.append(single_participant_data)
 
         # Iterate over the created data
@@ -173,7 +158,6 @@ class ShamirSecret:
             return 0 - self.treshold + len(self.decoding_participants_keys)
 
         self.decoding_participants_keys.append(participant_data["keys"])
-        #print(participant_data["keys"])
         self.byte_length = participant_data["byte_length"]
         self.creation_date = participant_data["creation_date"]
         self.owner = participant_data["owner"]
@@ -196,11 +180,8 @@ class ShamirSecret:
             this_parts_encrypted_ints: list = []
             for line in self.decoding_participants_keys:
                 this_parts_encrypted_ints.append(line[key_ind])
-            #print(this_parts_encrypted_ints)
             decrypted_ints.append(self.reconstruct_secret(this_parts_encrypted_ints))
-            print(decrypted_ints[-1])
-        print(integer_list_to_string(decrypted_ints, self.bytes_per_integer))
-        return "I tried, but this is all I could do!"
+        return integer_list_to_string(decrypted_ints, self.bytes_per_integer)
 
     def reconstruct_secret(self, shares: list) -> int:
         """
@@ -277,8 +258,6 @@ class ShamirSecret:
     def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
         self.secret_matrix = []
         self.__init__("","")
-        print("Exited Samir secret handler")
     
     def __enter__(self):
-        print("Created Samir secret handler")
         return self
