@@ -70,22 +70,19 @@ class ShamirSecret:
         self.shares = shares
         self.name = name
         self.owner = owner
-        self.uuid = uuid4()
-        self.plain_text_codes: list = []
+        self.uuid = str(uuid4())
         self.secret_matrix: list = []
-        self.byte_length: int = 0
         self.creation_date = datetime.datetime(1800, 1, 1)
-        self.decoding_participants_keys: list =[]
+        self.decoding_participants_keys: list = []
         self.bytes_per_integer: int = 8 # Growing this may brake decoding
 
     def create_secret(self, secret_raw: str)->None:
-        self.plain_text_codes = string_to_integers(
-            secret_raw, 
+        plain_text_codes: list = string_to_integers(
+            secret_raw,
             self.bytes_per_integer
         )
-        self.byte_length = self.plain_text_codes[0]
-        self.creation_date = datetime.datetime.now()
-        for plaintext_integer in self.plain_text_codes:
+        self.creation_date = str(datetime.datetime.now())
+        for plaintext_integer in plain_text_codes:
             self.secret_matrix.append(
                 self.generate_shares(
                     self.shares,
@@ -112,17 +109,16 @@ class ShamirSecret:
         # Iterate over the created data
         index = -1
         while index + 1 < len(participant_data):
-            index += 1            
+            index += 1
             yield {
                 "keys": participant_data[index],
-                "byte_length": self.byte_length,
                 "creation_date": self.creation_date,
                 "owner": self.owner,
                 "name": self.name,
                 "uuid": self.uuid,
                 "treshold": self.treshold,
                 "shares": self.shares
-            }            
+            }
 
     def populate_decoder(self, participant_data: dict) -> int:
         """
@@ -143,12 +139,16 @@ class ShamirSecret:
         failed = False
         if self.decoding_participants_keys:
             # Some data in secret_matrix. Check the newly given
-            # matches that            
+            # matches that
             if self.creation_date != participant_data["creation_date"]:
                 failed = True
             if self.uuid != participant_data["uuid"]:
                 failed = True
             if self.name != participant_data["name"]:
+                failed = True
+            if self.shares != participant_data["shares"]:
+                failed = True
+            if self.treshold != participant_data["treshold"]:
                 failed = True
 
         if participant_data["keys"] in self.decoding_participants_keys:
@@ -158,7 +158,6 @@ class ShamirSecret:
             return 0 - self.treshold + len(self.decoding_participants_keys)
 
         self.decoding_participants_keys.append(participant_data["keys"])
-        self.byte_length = participant_data["byte_length"]
         self.creation_date = participant_data["creation_date"]
         self.owner = participant_data["owner"]
         self.name = participant_data["name"]
@@ -256,8 +255,9 @@ class ShamirSecret:
         return shares
 
     def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
-        self.secret_matrix = []
+        self.secret_matrix: list = []
+        self.decoding_participants_keys: list = []
         self.__init__("","")
-    
+
     def __enter__(self):
         return self

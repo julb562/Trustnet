@@ -1,45 +1,58 @@
 from config import Config
-from participant import Participant
+from participant import Participants
+from keystore import KeyStore
 from shamir import ShamirSecret
+import configparser
+import click
+
+CONFIG_FILE_NAME = "default_config.ini"
 
 
-bad_strings = open("../big-list-of-naughty-strings/blns.txt", "r")
-line: int = 0
+config = configparser.ConfigParser()
+config.sections()
+config.read(CONFIG_FILE_NAME)
 
-for key in bad_strings:
-    line += 1
+participants = Participants()
+participants.load_all(
+    config["local_settings"]["participant_file"]
+)
+# participants.participant_dict["controller2"] = {
+#     "address": ["127.0.0.1", "rafael-ubuntu.saarinen.vpn"],
+#     "key_name": "controller"
+# }
 
-    participant_data = []
+key_store = KeyStore()
+key_store.load_all(
+    config["local_settings"]["key_store_file"]
+)
 
-    with ShamirSecret("Tester", "localhost", 6, 3) as secret1:
-        secret1.create_secret(key)
+def create_secret(secret: str) -> None:
+    participant_data: list = []
+    # TODO: Get shares and treshold from real life
+    shares = 6
+    treshold = 3
+    with ShamirSecret("Tester", "localhost", shares, treshold) as secret1:
+        secret1.create_secret(secret)
         for single_participant_data in secret1.iterate_participants():
-            #print(single_participant_data)
             participant_data.append(single_participant_data)
+    # TODO: Spread the keys to participants
 
-    with ShamirSecret("Tester", "localhost", 6, 3) as secret2:
+def decrypt_secret(name_of_secret: str) -> str:
+    # TODO: Get participant keys from network
+    participant_data = [ 12, 12, 12, 12]
+    # TODO: Get shares and treshold from real life    
+    shares = 6
+    treshold = 3
+    with ShamirSecret("Tester", "localhost", shares, treshold) as secret2:
         secret2.populate_decoder(participant_data[1])
-        secret2.populate_decoder(participant_data[2])
-        secret2.populate_decoder(participant_data[2])
-        secret2.populate_decoder(participant_data[2])
+        secret2.populate_decoder(participant_data[4])
         secret2.populate_decoder(participant_data[0])
-        result = secret2.decode()
+        try: result = secret2.decode()
+        except: return ""
+    return result
 
-    if result != key:
-        print(f"\n Line {line} failed")
-    else: print(".", end="")
-print(f"\n{line} lines went ok")
-    
+participants.save_all(config["local_settings"]["participant_file"])
+key_store.save_all(config["local_settings"]["key_store_file"])
+with open(CONFIG_FILE_NAME, 'w', encoding="utf8") as configfile:
+    config.write(configfile)
 
-#key = get_random_bytes(16)
-
-#shares = Shamir.split(2, 5, key)
-#for piece in shares:
-#    print(piece)
-#for idx, share in shares:
-#    print "Index #%d: %s" % (idx, hexlify(share))
-
-#with open("clear.txt", "rb") as fi, open("enc.txt", "wb") as fo:
-#    cipher = AES.new(key, AES.MODE_EAX)
-#    ct, tag = cipher.encrypt(fi.read()), cipher.digest()
-#    fo.write(cipher.nonce + tag + ct)
