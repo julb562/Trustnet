@@ -8,23 +8,27 @@ import click
 CONFIG_FILE_NAME = "default_config.ini"
 
 
-config = configparser.ConfigParser()
-config.sections()
-config.read(CONFIG_FILE_NAME)
+def load_all():
+    config = configparser.ConfigParser()
+    config.sections()
+    config.read(CONFIG_FILE_NAME)
 
-participants = Participants()
-participants.load_all(
-    config["local_settings"]["participant_file"]
-)
-# participants.participant_dict["controller2"] = {
-#     "address": ["127.0.0.1", "rafael-ubuntu.saarinen.vpn"],
-#     "key_name": "controller"
-# }
+    participants = Participants()
+    participants.load_all(
+        config["local_settings"]["participant_file"]
+    )
 
-key_store = KeyStore()
-key_store.load_all(
-    config["local_settings"]["key_store_file"]
-)
+    key_store = KeyStore()
+    key_store.load_all(
+        config["local_settings"]["key_store_file"]
+    )
+
+def save_all():
+    participants.save_all(config["local_settings"]["participant_file"])
+    key_store.save_all(config["local_settings"]["key_store_file"])
+    with open(CONFIG_FILE_NAME, 'w', encoding="utf8") as configfile:
+        config.write(configfile)
+
 
 def create_secret(secret: str) -> None:
     participant_data: list = []
@@ -47,12 +51,13 @@ def decrypt_secret(name_of_secret: str) -> str:
         secret2.populate_decoder(participant_data[1])
         secret2.populate_decoder(participant_data[4])
         secret2.populate_decoder(participant_data[0])
-        try: result = secret2.decode()
-        except: return ""
+        try:
+            result = secret2.decode()
+        except:
+            return ""
     return result
 
-participants.save_all(config["local_settings"]["participant_file"])
-key_store.save_all(config["local_settings"]["key_store_file"])
-with open(CONFIG_FILE_NAME, 'w', encoding="utf8") as configfile:
-    config.write(configfile)
+def request_secret(name: str) -> str:
+    return ""
+
 
