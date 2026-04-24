@@ -13,6 +13,61 @@ Required settings keys:
 """
 
 import httpx
+import configparser
+from participant import Participants
+from keystore import KeyStore
+from shamir import ShamirSecret
+
+CONFIG_FILE_NAME = "default_config.ini"
+
+participants = Participants()
+key_store = KeyStore()
+config = configparser.ConfigParser()
+
+def load_all():    
+    global participants, config, key_store
+    _participants = participants
+    _config = config
+    _key_store = key_store
+    _config.sections()
+    _config.read(CONFIG_FILE_NAME)
+
+    _participants.load_all(
+        _config["local_settings"]["participant_file"]
+    )
+
+    _key_store.load_all(
+        _config["local_settings"]["key_store_file"]
+    )
+
+def save_all():
+    global participants, config, key_store
+    _participants = participants
+    _config = config
+    _key_store = key_store
+    _participants.save_all(_config["local_settings"]["participant_file"])
+    _key_store.save_all(_config["local_settings"]["key_store_file"])
+    with open(CONFIG_FILE_NAME, 'w', encoding="utf8") as configfile:
+        _config.write(configfile)
+
+
+def create_secret(secret: str, shares: int, treshold: int) -> list:
+    participant_data: list = []
+    with ShamirSecret("Tester", "localhost", shares, treshold) as secret1:
+        secret1.create_secret(secret)
+        for single_participant_data in secret1.iterate_participants():
+            participant_data.append(single_participant_data)
+    return participant_data
+
+def decrypt_secret(participant_data: list, shares: int, treshold: int) -> str:
+    with ShamirSecret("Tester", "localhost", shares, treshold) as secret2:
+        for single_data in participant_data:
+            secret2.populate_decoder(single_data)
+        try:
+            result = secret2.decode()
+        except:
+            return ""
+    return result
 
 
 def _make_client(settings: dict) -> httpx.Client:

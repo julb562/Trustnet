@@ -1,6 +1,10 @@
+"""
+Module for coding and encoding Shamir secrets
+
+"""
 import secrets
-from math import ceil
-import base64
+# from math import ceil
+# import base64
 import datetime
 from uuid import uuid4
 
@@ -38,7 +42,7 @@ class ShamirSecret:
     """
     Class for one secret encoding & decoding
 
-    Original secret_raw can be a string of any format for it's tarnsformed:
+    Original secret_raw can be a string of any format
     """
 
     def __init__(
@@ -63,7 +67,11 @@ class ShamirSecret:
                 #   particip1,  particip2, particip3, ---
                    ] 
              3. Each secret holder should now be handed all keys in vertical
-                axis of this matrix
+                axis of this matrix -> iterate_participants
+
+            decrypt secret:
+             1. Bring enough (treshold) data to class with populate_decoder
+             2. Run decode()
         """
         self.ready_to_decode = False
         self.treshold = treshold
@@ -84,7 +92,7 @@ class ShamirSecret:
         self.creation_date = str(datetime.datetime.now())
         for plaintext_integer in plain_text_codes:
             self.secret_matrix.append(
-                self.generate_shares(
+                self._generate_shares(
                     self.shares,
                     self.treshold,
                     plaintext_integer))
@@ -172,6 +180,9 @@ class ShamirSecret:
         return shares_needed
 
     def decode(self) -> str:
+        """
+        Decodes secret string if enough data is inserted via populate_decoder()
+        """
         if not self.ready_to_decode:
             return ""
         decrypted_ints: list = []
@@ -179,10 +190,10 @@ class ShamirSecret:
             this_parts_encrypted_ints: list = []
             for line in self.decoding_participants_keys:
                 this_parts_encrypted_ints.append(line[key_ind])
-            decrypted_ints.append(self.reconstruct_secret(this_parts_encrypted_ints))
+            decrypted_ints.append(self._reconstruct_secret(this_parts_encrypted_ints))
         return integer_list_to_string(decrypted_ints, self.bytes_per_integer)
 
-    def reconstruct_secret(self, shares: list) -> int:
+    def _reconstruct_secret(self, shares: list) -> int:
         """
         Combines individual shares (points on graph)
         using Lagrange interpolation in GF(PRIME).
@@ -205,7 +216,7 @@ class ShamirSecret:
         return sums
 
 
-    def polynom(self, x, coefficients):
+    def _polynom(self, x, coefficients):
         """
         This generates a single point on the graph of given polynomial
         in `x`. The polynomial is given by the list of `coefficients`.
@@ -219,7 +230,7 @@ class ShamirSecret:
         return point
 
 
-    def coeff(self, treshold, secret):
+    def _coeff(self, treshold, secret):
         """
         Randomly generate a list of coefficients for a polynomial with
         degree of `treshold` - 1, whose constant is `secret`.
@@ -236,12 +247,12 @@ class ShamirSecret:
         return coeff
 
 
-    def generate_shares(self, n_shares, m, secret) -> list:
+    def _generate_shares(self, n_shares, m, secret) -> list:
         """
         Split given `secret` into `n_shares` shares with minimum threshold
         of `m` shares to recover this `secret`, using SSS algorithm.
         """
-        coefficients = self.coeff(m, secret)
+        coefficients = self._coeff(m, secret)
         shares = []
         x_values: set = set()
 
@@ -250,7 +261,7 @@ class ShamirSecret:
             if x in x_values:
                 continue
             x_values.add(x)
-            shares.append((x, self.polynom(x, coefficients)))
+            shares.append((x, self._polynom(x, coefficients)))
 
         return shares
 
