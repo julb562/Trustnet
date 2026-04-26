@@ -1,73 +1,19 @@
 """
-Trustnet mTLS HTTP client – node-to-node communication.
+Trustnet mTLS HTTP client - node-to-node communication.
 
-Every outgoing request presents this node's certificate (signed by the shared CA),
-satisfying the server's CERT_REQUIRED policy. The server certificate is verified
-against the same CA, so both directions are authenticated.
+Every outgoing request presents this node's certificate (signed by the shared
+CA), satisfying the server's CERT_REQUIRED policy. The server certificate is 
+verified against the same CA, so both directions are authenticated.
 
 Required settings keys:
-    certificate    – path to this node's certificate
-    private_key    – path to this node's private key
-    ca_file        – path to the shared CA certificate
-    participant_name – this node's name (sent as the caller identity)
+    certificate    - path to this node's certificate
+    private_key    - path to this node's private key
+    ca_file        - path to the shared CA certificate
+    participant_name - this node's name (sent as the caller identity)
 """
 
 import httpx
-import configparser
-from participant import Participants
-from keystore import KeyStore
-from shamir import ShamirSecret
-
-CONFIG_FILE_NAME = "default_config.ini"
-
-participants = Participants()
-key_store = KeyStore()
-config = configparser.ConfigParser()
-
-def load_all():    
-    global participants, config, key_store
-    _participants = participants
-    _config = config
-    _key_store = key_store
-    _config.sections()
-    _config.read(CONFIG_FILE_NAME)
-
-    _participants.load_all(
-        _config["local_settings"]["participant_file"]
-    )
-
-    _key_store.load_all(
-        _config["local_settings"]["key_store_file"]
-    )
-
-def save_all():
-    global participants, config, key_store
-    _participants = participants
-    _config = config
-    _key_store = key_store
-    _participants.save_all(_config["local_settings"]["participant_file"])
-    _key_store.save_all(_config["local_settings"]["key_store_file"])
-    with open(CONFIG_FILE_NAME, 'w', encoding="utf8") as configfile:
-        _config.write(configfile)
-
-
-def create_secret(secret: str, shares: int, treshold: int) -> list:
-    participant_data: list = []
-    with ShamirSecret("Tester", "localhost", shares, treshold) as secret1:
-        secret1.create_secret(secret)
-        for single_participant_data in secret1.iterate_participants():
-            participant_data.append(single_participant_data)
-    return participant_data
-
-def decrypt_secret(participant_data: list, shares: int, treshold: int) -> str:
-    with ShamirSecret("Tester", "localhost", shares, treshold) as secret2:
-        for single_data in participant_data:
-            secret2.populate_decoder(single_data)
-        try:
-            result = secret2.decode()
-        except:
-            return ""
-    return result
+import data_pipe
 
 
 def _make_client(settings: dict) -> httpx.Client:
@@ -87,12 +33,17 @@ def check_health(settings: dict, address: str, port: int) -> dict:
         return r.json()
 
 
-def send_share(settings: dict, address: str, port: int, share_data: dict) -> None:
+def send_share(
+    settings: dict,
+    address: str,
+    port: int,
+    share_data: dict
+) -> None:
     """
     Send one participant share to a remote node for storage.
 
     share_data is a single value yielded by ShamirSecret.iterate_participants().
-    The 'keys' field contains Python tuples which JSON will encode as arrays –
+    The 'keys' field contains Python tuples which JSON will encode as arrays -
     this is handled automatically by the standard json serialiser.
     """
     with _make_client(settings) as c:
@@ -106,7 +57,12 @@ def send_share(settings: dict, address: str, port: int, share_data: dict) -> Non
         r.raise_for_status()
 
 
-def fetch_share(settings: dict, address: str, port: int, secret_uuid: str) -> dict:
+def fetch_share(
+    settings: dict,
+    address: str,
+    port: int,
+    secret_uuid: str
+) -> dict:
     """
     Retrieve a stored share from a remote node.
 
@@ -120,8 +76,13 @@ def fetch_share(settings: dict, address: str, port: int, secret_uuid: str) -> di
             params={"requester": settings["participant_name"]},
         )
         r.raise_for_status()
-        data = r.json()
+        share_data = r.json()
     # Restore (x, y) tuples from JSON arrays so Shamir's unpacking works
-    if "keys" in data:
-        data["keys"] = [tuple(k) for k in data["keys"]]
-    return data
+    if "keys" in share_data:
+        share_data["keys"] = [tuple(k) for k in share_data["keys"]]
+    return share_data
+
+if __name__ == "__main__":
+    data = data_pipe.Data()
+    data.load_all()
+    print(f"I'm {data.config["local_settings"]["participant_name"]}")

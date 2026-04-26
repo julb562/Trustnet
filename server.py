@@ -21,7 +21,6 @@ Run standalone:
 Or call server.run(settings, participant_dict) from main.py.
 """
 
-import configparser
 import json
 import ssl
 from datetime import datetime, timezone
@@ -30,6 +29,8 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+import data_pipe
 
 app = FastAPI(title="Trustnet Node")
 
@@ -40,20 +41,13 @@ _share_store: dict = {}
 _share_store_path: str = "share_store.json"
 
 
-# ── storage ───────────────────────────────────────────────────────────────────
-
-def _load_store(path: str) -> dict:
-    p = Path(path)
-    return json.loads(p.read_text()) if p.exists() else {}
-
-
-def _save_store() -> None:
-    Path(_share_store_path).write_text(json.dumps(_share_store, indent=2))
-
-
 # ── request model ─────────────────────────────────────────────────────────────
 
 class ReceiveShareRequest(BaseModel):
+    """
+    Not a docstring
+    """
+    # todo: add docstring
     owner_name: str   # self-declared identity of the sender
     share: dict       # full participant dict from ShamirSecret.iterate_participants()
 
@@ -84,25 +78,29 @@ async def receive_share(body: ReceiveShareRequest) -> dict:
     """
     _require_participant(body.owner_name)
     secret_uuid = body.share.get("uuid")
+    secret_name = body.share.get("name")
     if not secret_uuid:
         raise HTTPException(status_code=400, detail="Share data is missing 'uuid'")
+    if not secret_name:
+        raise HTTPException(status_code=400, detail="Share data is missing 'name'")
     body.share["_received_at"] = datetime.now(timezone.utc).isoformat()
     body.share["_sent_by"] = body.owner_name
-    _share_store[secret_uuid] = body.share
-    _save_store()
+    #_share_store[secret_name] = body.share
+    #_save_store()
+    data.key_store.secret_list.append(body.share)
     return {"status": "stored", "uuid": secret_uuid}
 
 
-@app.get("/shares/{secret_uuid}")
-async def get_share(secret_uuid: str, requester: str) -> dict:
+@app.get("/shares/{secret_name}")
+async def get_share(secret_name: str, requester: str) -> dict:
     """
-    Return the stored share for secret_uuid.
+    Return the stored share for secret_name.
 
     Only the original sender (the secret owner) may retrieve the share.
     Pass ?requester=<participant_name> in the query string.
     """
     _require_participant(requester)
-    entry = _share_store.get(secret_uuid)
+    entry = _share_store.get(secret_name)
     if not entry:
         raise HTTPException(status_code=404, detail="Share not found")
     if entry.get("_sent_by") != requester and entry.get("owner") != requester:
@@ -113,38 +111,38 @@ async def get_share(secret_uuid: str, requester: str) -> dict:
 
 # ── entry points ──────────────────────────────────────────────────────────────
 
-def run(settings: dict, participant_dict: dict) -> None:
+def run(local_data: data_pipe.Data) -> None:
     """
     Start the node server. Blocks until the process is terminated.
 
     settings       – dict of [local_settings] from default_config.ini
     participant_dict – loaded from participants.ini (Participants.participant_dict)
     """
-    global _settings, _participant_dict, _share_store, _share_store_path
-    _settings = settings
-    _participant_dict = participant_dict
-    _share_store_path = settings.get("share_store_file", "share_store.json")
-    _share_store = _load_store(_share_store_path)
+    _settings = local_data.config["local_settings"]
+    _participant_dict = local_data.participants
+    #_share_store_path = settings.get("share_store_file", "share_store.json")
+    #_share_store = _load_store(_share_store_path)
 
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=int(settings.get("server_port", 8443)),
-        ssl_keyfile=settings["private_key"],
-        ssl_certfile=settings["certificate"],
-        ssl_ca_certs=settings["ca_file"],
+        port=int(local_data.config["local_settings"].get("server_port", 8443)),
+        ssl_keyfile=local_data.config["local_settings"]["private_key"],
+        ssl_certfile=local_data.config["local_settings"]["certificate"],
+        ssl_ca_certs=local_data.config["local_settings"]["ca_file"],
         ssl_cert_reqs=ssl.CERT_REQUIRED,
         log_level="info",
     )
 
 
 if __name__ == "__main__":
-    cfg = configparser.ConfigParser()
-    cfg.read("default_config.ini")
-    s = dict(cfg["local_settings"])
+    data = data_pipe.Data()
+    data.load_all()
 
-    from participant import Participants
-    p = Participants()
-    p.load_all(s["participant_file"])
+    # cfg = configparser.ConfigParser()
+    # cfg.read("default_config.ini")
+    # s = dict(cfg["local_settings"])
+    # p = Participants()
+    # p.load_all(s["participant_file"])
 
-    run(s, p.participant_dict)
+    run(data)

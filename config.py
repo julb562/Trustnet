@@ -1,5 +1,3 @@
-from pathlib import Path
-
 class Config:
     def __init__(self, path: str="./", filename: str="config.ini"):
         self.config_file = "./my_config.ini"

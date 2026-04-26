@@ -106,9 +106,12 @@ class ShamirSecret:
 
         # Create the key data per participant
         participant_data = []
-        for secret_ind, secret in enumerate(self.secret_matrix[0]):
+        # for secret_ind, secret in enumerate(self.secret_matrix[0]):
+        for secret_ind in range(0, len(self.secret_matrix[0])):
+            # pylint: disable=consider-using-enumerate;
             single_participant_data: list = []
-            for participant_ind, secret_list in enumerate(self.secret_matrix):
+            #for participant_ind, secret_list in enumerate(self.secret_matrix):
+            for participant_ind in range(0,len(self.secret_matrix)):
                 single_participant_data.append(
                     self.secret_matrix[participant_ind][secret_ind]
                 )
@@ -186,6 +189,7 @@ class ShamirSecret:
         if not self.ready_to_decode:
             return ""
         decrypted_ints: list = []
+        # pylint: disable=unused-variable;
         for key_ind, temp in enumerate(self.decoding_participants_keys[0]):
             this_parts_encrypted_ints: list = []
             for line in self.decoding_participants_keys:
